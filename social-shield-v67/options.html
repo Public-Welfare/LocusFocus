@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LocusFocus – Options</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="options-body">
+  <main class="options-shell">
+    <section class="card options-hero">
+      <div class="brand">
+        <div class="brand-icon">LF</div>
+        <div>
+          <p class="eyebrow">Control center</p>
+          <h1>LocusFocus</h1>
+          <p class="muted">Stay focused. Block distractions.</p>
+        </div>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="Theme selection">
+        <button class="theme-btn" type="button" data-theme-value="light">Light</button>
+        <button class="theme-btn" type="button" data-theme-value="dark">Dark</button>
+      </div>
+    </section>
+
+    <section class="card options-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Rules</p>
+          <h2>Blocked websites</h2>
+          <p class="muted">These sites will be blocked. One domain per line.</p>
+        </div>
+        <div class="section-actions">
+          <button id="save-domains" class="btn" type="button">Save</button>
+          <button id="reset-domains" class="btn ghost" type="button">Reset to defaults</button>
+        </div>
+      </div>
+      <textarea id="domains-list" rows="14" placeholder="facebook.com
+instagram.com
+twitter.com
+youtube.com"></textarea>
+      <p id="domains-status" class="status"></p>
+    </section>
+
+    <section class="card options-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Connect with friends</p>
+          <h2>Group Lock</h2>
+          <p class="muted">Create a group or join your friend's group for mutual accountability.</p>
+        </div>
+      </div>
+      
+      <div class="options-grid">
+        <label class="field">
+          <span class="field-label">Your Name</span>
+          <input type="text" id="userId" placeholder="Enter your name (e.g., Alice)" />
+        </label>
+      </div>
+
+      <div class="card" style="background: var(--surface-muted); box-shadow: none; margin-top: 16px;">
+        <p class="muted" style="font-weight: 600; margin-bottom: 12px;">Create New Group</p>
+        <button id="createGroup" class="btn" type="button" style="width: 100%;">Create Group & Get Invite Link</button>
+        <p id="inviteLink" class="status" style="margin-top: 12px;"></p>
+      </div>
+
+      <div style="text-align: center; margin: 16px 0; color: var(--muted);">— OR —</div>
+
+      <div class="card" style="background: var(--surface-muted); box-shadow: none;">
+        <p class="muted" style="font-weight: 600; margin-bottom: 12px;">Join Friend's Group</p>
+        <label class="field">
+          <span class="field-label">Group Invite Code</span>
+          <input type="text" id="groupCode" placeholder="Paste invite code from friend" />
+        </label>
+        <button id="joinGroup" class="btn outline" type="button" style="width: 100%; margin-top: 8px;">Join Group</button>
+      </div>
+
+      <p id="groupStatus" class="status" style="margin-top: 16px;"></p>
+    </section>
+
+    <section class="card options-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Backend Server</p>
+          <h2>Configuration</h2>
+          <p class="muted">Backend server is required. Default: Railway hosted server.</p>
+        </div>
+        <div class="section-actions">
+          <button id="save" class="btn" type="button">Save</button>
+          <button id="test" class="btn outline" type="button">Test connection</button>
+        </div>
+      </div>
+      <div class="options-grid">
+        <label class="field">
+          <span class="field-label">Backend URL</span>
+          <input type="text" id="backendUrl" placeholder="https://your-backend.railway.app" value="https://locusfocus-backend.up.railway.app" />
+        </label>
+      </div>
+      <p id="save-status" class="status"></p>
+      <div class="card" style="background: var(--surface-muted); box-shadow: none;">
+        <p class="muted" style="font-weight: 600;">ℹ️ Info</p>
+        <p class="note">Using default Railway hosted backend. You can also deploy your own server - see documentation.</p>
+      </div>
+    </section>
+
+    <footer>
+      <a href="popup.html">← Back to popup</a>
+    </footer>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Generate LocusFocus Icons</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #f0f0f0;
+        }
+        .icon-container {
+            display: inline-block;
+            margin: 20px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            background: white;
+            display: block;
+            margin: 10px auto;
+        }
+        button {
+            padding: 10px 20px;
+            background: #0071e3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0077ed;
+        }
+        h2 { color: #333; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ LocusFocus Icon Generator</h1>
+    <p>Click the buttons below to download each icon size:</p>
+    
+    <div class="icon-container">
+        <h2>16x16</h2>
+        <canvas id="icon16" width="16" height="16"></canvas>
+        <button onclick="downloadIcon('icon16', 16)">Download icon16.png</button>
+    </div>
+    
+    <div class="icon-container">
+        <h2>32x32</h2>
+        <canvas id="icon32" width="32" height="32"></canvas>
+        <button onclick="downloadIcon('icon32', 32)">Download icon32.png</button>
+    </div>
+    
+    <div class="icon-container">
+        <h2>48x48</h2>
+        <canvas id="icon48" width="48" height="48"></canvas>
+        <button onclick="downloadIcon('icon48', 48)">Download icon48.png</button>
+    </div>
+    
+    <div class="icon-container">
+        <h2>128x128</h2>
+        <canvas id="icon128" width="128" height="128"></canvas>
+        <button onclick="downloadIcon('icon128', 128)">Download icon128.png</button>
+    </div>
+
+    <script>
+        function drawShield(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const scale = size / 128;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Draw gradient background
+            const gradient = ctx.createLinearGradient(0, 0, 0, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Draw shield shape
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+            ctx.scale(scale, scale);
+            
+            ctx.beginPath();
+            ctx.moveTo(0, -50);
+            ctx.lineTo(40, -30);
+            ctx.lineTo(40, 20);
+            ctx.quadraticCurveTo(40, 50, 0, 60);
+            ctx.quadraticCurveTo(-40, 50, -40, 20);
+            ctx.lineTo(-40, -30);
+            ctx.closePath();
+            
+            ctx.fillStyle = 'white';
+            ctx.fill();
+            
+            // Draw lock symbol
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            
+            // Lock body
+            ctx.fillStyle = '#667eea';
+            ctx.fillRect(-15, 5, 30, 25);
+            ctx.beginPath();
+            ctx.arc(0, 5, 15, 0, Math.PI, true);
+            ctx.stroke();
+            
+            // Lock dot
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(0, 17, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // Draw all icons
+        ['icon16', 'icon32', 'icon48', 'icon128'].forEach(id => {
+            const canvas = document.getElementById(id);
+            const size = parseInt(id.replace('icon', ''));
+            drawShield(canvas, size);
+        });
+        
+        function downloadIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `${canvasId}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>

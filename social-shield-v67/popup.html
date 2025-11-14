@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LocusFocus</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="popup-body">
+  <main class="popup-shell">
+    <header class="popup-header">
+      <div class="brand">
+        <div class="brand-icon">LF</div>
+        <div>
+          <p class="eyebrow">Focus companion</p>
+          <h1>LocusFocus</h1>
+        </div>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="Theme selection">
+        <button class="theme-btn" type="button" data-theme-value="light">Light</button>
+        <button class="theme-btn" type="button" data-theme-value="dark">Dark</button>
+      </div>
+    </header>
+
+    <p class="lead">Stay on task with instant blocking, Ultra Lock, and partner accountability.</p>
+
+    <section class="card stack">
+      <div class="card-header between">
+        <div>
+          <p class="eyebrow">Quick block</p>
+          <h2>Shield Switch</h2>
+          <p class="muted">Toggle blocking of popular social sites.</p>
+        </div>
+        <label class="switch" aria-label="Toggle blocking">
+          <input type="checkbox" id="toggle-block">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p id="block-note" class="note"></p>
+    </section>
+
+    <section class="card stack">
+      <div class="card-header">
+        <p class="eyebrow">Deep focus</p>
+        <h2>Ultra Lock</h2>
+        <p class="muted">Lock for a fixed time. Cannot be turned off until the timer ends.</p>
+      </div>
+      <div class="control-row">
+        <label class="field">
+          <span class="field-label">Minutes</span>
+          <input type="number" id="ultra-mins" min="1" value="30" />
+        </label>
+        <button id="start-ultra" class="btn" type="button">Start</button>
+      </div>
+      <p id="ultra-status" class="note"></p>
+    </section>
+
+    <section class="card stack">
+      <div class="card-header">
+        <p class="eyebrow">Stay accountable</p>
+        <h2>Mutual Lock</h2>
+        <p class="muted">Pair with a buddy to keep each other honest.</p>
+      </div>
+      <div class="button-grid">
+        <button id="open-options" class="btn outline" type="button">Setup / Pair</button>
+        <button id="mutual-lock" class="btn" type="button">Request Lock</button>
+        <button id="mutual-unlock" class="btn danger" type="button">Request Unlock</button>
+      </div>
+      <p id="mutual-status" class="note"></p>
+    </section>
+
+    <footer class="popup-footer">
+      <a href="options.html" target="_blank" class="link">Open options</a>
+    </footer>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

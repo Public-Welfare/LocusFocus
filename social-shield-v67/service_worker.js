@@ -1,0 +1,303 @@
+import { SOCIAL_DOMAINS } from './social_domains.js';
+import { LocusFocusAPI } from './backend-api.js';
+// import { initFirebase } from './firebase.js'; // Firebase temporarily disabled
+
+const STORAGE_KEYS = {
+  BLOCK_ENABLED: 'blockEnabled',
+  ULTRA_LOCK_UNTIL: 'ultraLockUntil',
+  MUTUAL: 'mutual',
+  BACKEND_ENABLED: 'backendEnabled',
+  CUSTOM_DOMAINS: 'customDomains',
+  LOCKED_BY: 'lockedBy',
+  GROUP_INVITE: 'groupInvite'
+};
+
+const RULESET_ID = 20000;
+
+async function getActiveDomains() {
+  const { [STORAGE_KEYS.CUSTOM_DOMAINS]: customDomains } = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_DOMAINS);
+  if (customDomains && Array.isArray(customDomains) && customDomains.length > 0) {
+    return customDomains;
+  }
+  return SOCIAL_DOMAINS;
+}
+
+function buildRules() {
+  let id = RULESET_ID;
+  return SOCIAL_DOMAINS.map(domain => ({
+    id: id++,
+    priority: 1,
+    action: { type: 'redirect', redirect: { extensionPath: '/blocked.html' } },
+    condition: { urlFilter: `||${domain}^`, resourceTypes: ["main_frame", "sub_frame"] }
+  }));
+}
+
+async function buildRulesFromDomains(domains) {
+  let id = RULESET_ID;
+  return domains.map(domain => ({
+    id: id++,
+    priority: 1,
+    action: { type: 'redirect', redirect: { extensionPath: '/blocked.html' } },
+    condition: { urlFilter: `||${domain}^`, resourceTypes: ["main_frame", "sub_frame"] }
+  }));
+}
+
+async function enableBlocking() {
+  const domains = await getActiveDomains();
+  const rules = await buildRulesFromDomains(domains);
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: rules.map(r => r.id),
+    addRules: rules
+  });
+}
+
+async function disableBlocking() {
+  const domains = await getActiveDomains();
+  const rules = await buildRulesFromDomains(domains);
+  const ids = rules.map(r => r.id);
+  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: ids });
+}
+
+async function isUltraLocked(now = Date.now()) {
+  const { [STORAGE_KEYS.ULTRA_LOCK_UNTIL]: until } = await chrome.storage.local.get(STORAGE_KEYS.ULTRA_LOCK_UNTIL);
+  return typeof until === 'number' && now < until;
+}
+
+async function getState() {
+  const data = await chrome.storage.local.get(Object.values(STORAGE_KEYS));
+  return {
+    blockEnabled: !!data[STORAGE_KEYS.BLOCK_ENABLED],
+    ultraLockUntil: data[STORAGE_KEYS.ULTRA_LOCK_UNTIL] || null,
+    mutual: data[STORAGE_KEYS.MUTUAL] || { enabled: false },
+    backendEnabled: !!data[STORAGE_KEYS.BACKEND_ENABLED]
+  };
+}
+
+async function setBlockEnabled(enabled) {
+  await chrome.storage.local.set({ [STORAGE_KEYS.BLOCK_ENABLED]: enabled });
+  if (enabled) await enableBlocking(); else await disableBlocking();
+}
+
+chrome.alarms.onAlarm.addListener(async alarm => {
+  if (alarm.name === 'ultra-lock-check') {
+    if (!(await isUltraLocked())) {
+      await chrome.storage.local.set({ [STORAGE_KEYS.ULTRA_LOCK_UNTIL]: null });
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Ultra Lock finished',
+        message: 'You\'re free! Social sites are no longer forcibly locked.'
+      });
+      chrome.alarms.clear('ultra-lock-check');
+    }
+  }
+});
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  (async () => {
+    if (msg.type === 'GET_STATE') {
+      const state = await getState();
+      state.effectiveLocked = await computeEffectiveLocked(state);
+      sendResponse(state);
+    }
+    if (msg.type === 'GET_DOMAINS') {
+      const domains = await getActiveDomains();
+      sendResponse({ ok: true, domains });
+    }
+    if (msg.type === 'SAVE_DOMAINS') {
+      const { domains } = msg;
+      await chrome.storage.local.set({ [STORAGE_KEYS.CUSTOM_DOMAINS]: domains });
+      const state = await getState();
+      if (state.blockEnabled) {
+        await disableBlocking();
+        await enableBlocking();
+      }
+      sendResponse({ ok: true });
+    }
+    if (msg.type === 'TOGGLE_BLOCK') {
+      const state = await getState();
+      if (await isUltraLocked()) { sendResponse({ ok: false, reason: 'ULTRA_LOCK_ACTIVE' }); return; }
+      const next = !state.blockEnabled;
+      await setBlockEnabled(next);
+      sendResponse({ ok: true, blockEnabled: next });
+    }
+    if (msg.type === 'START_ULTRA_LOCK') {
+      const { minutes } = msg;
+      const until = Date.now() + Math.max(1, minutes) * 60 * 1000;
+      await chrome.storage.local.set({ [STORAGE_KEYS.ULTRA_LOCK_UNTIL]: until });
+      await setBlockEnabled(true);
+      chrome.alarms.create('ultra-lock-check', { delayInMinutes: 1, periodInMinutes: 1 });
+      sendResponse({ ok: true, until });
+    }
+    if (msg.type === 'CANCEL_ULTRA_LOCK') { sendResponse({ ok: false, reason: 'CANNOT_CANCEL_ULTRA_LOCK' }); }
+    if (msg.type === 'SAVE_MUTUAL_SETTINGS') {
+      const { enabled, userId, roomId, backendEnabled, backendUrl } = msg.payload;
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.MUTUAL]: { enabled, userId, roomId },
+        [STORAGE_KEYS.BACKEND_ENABLED]: !!backendEnabled,
+        backendConfig: { url: backendUrl || 'http://localhost:3000' }
+      });
+      if (apiClient) {
+        apiClient.disconnect();
+        apiClient = null;
+      }
+      if (enabled && backendEnabled) {
+        await ensureBackendAPI();
+      }
+      sendResponse({ ok: true });
+    }
+    if (msg.type === 'MUTUAL_REQUEST_LOCK') { const ok = await mutualRequestLock(); sendResponse({ ok }); }
+    if (msg.type === 'MUTUAL_REQUEST_UNLOCK') { 
+      const res = await mutualRequestUnlock(msg.targetUserId); 
+      sendResponse(res); 
+    }
+    if (msg.type === 'GET_LOCK_STATUS') {
+      const { lockedBy, mutual } = await chrome.storage.local.get([STORAGE_KEYS.LOCKED_BY, 'mutual']);
+      sendResponse({ lockedBy, canUnlock: !lockedBy || lockedBy === mutual?.userId });
+    }
+    if (msg.type === 'CREATE_GROUP') {
+      const { groupName, userId } = msg;
+      const groupId = 'group-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.MUTUAL]: { enabled: true, userId, roomId: groupId, isOwner: true },
+        [STORAGE_KEYS.BACKEND_ENABLED]: true
+      });
+      if (apiClient) {
+        apiClient.disconnect();
+        apiClient = null;
+      }
+      await ensureBackendAPI();
+      sendResponse({ ok: true, groupId, inviteLink: groupId });
+    }
+    if (msg.type === 'JOIN_GROUP') {
+      const { groupId, userId } = msg;
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.MUTUAL]: { enabled: true, userId, roomId: groupId, isOwner: false },
+        [STORAGE_KEYS.BACKEND_ENABLED]: true
+      });
+      if (apiClient) {
+        apiClient.disconnect();
+        apiClient = null;
+      }
+      await ensureBackendAPI();
+      sendResponse({ ok: true, groupId });
+    }
+  })();
+  return true;
+});
+
+let apiClient = null;
+
+async function ensureBackendAPI() {
+  const { [STORAGE_KEYS.BACKEND_ENABLED]: backendEnabled, backendConfig } = await chrome.storage.local.get([STORAGE_KEYS.BACKEND_ENABLED, 'backendConfig']);
+  if (!backendEnabled) return null;
+  if (apiClient) return apiClient;
+  try {
+    const baseURL = backendConfig?.url || 'http://localhost:3000';
+    apiClient = new LocusFocusAPI(baseURL);
+    
+    const { mutual } = await chrome.storage.local.get('mutual');
+    if (mutual?.roomId && mutual?.userId) {
+      await apiClient.joinRoom(mutual.roomId, mutual.userId, mutual.userId);
+      startBackendListener();
+    }
+    
+    return apiClient;
+  } catch (e) {
+    console.error('Backend API init failed', e);
+    return null;
+  }
+}
+
+async function handlePartnerLockChange(data) {
+  const { mutual } = await chrome.storage.local.get('mutual');
+  
+  if (data.type === 'lock_changed' && data.state) {
+    const myLock = data.state.locks?.[mutual.userId];
+    
+    if (myLock && myLock.lockedBy !== mutual.userId) {
+      // Partner locked/unlocked us
+      if (myLock.locked) {
+        await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: myLock.lockedBy });
+        await setBlockEnabled(true);
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: 'Locked by partner',
+          message: `${myLock.lockedBy} has locked your social media access.`
+        });
+      } else {
+        await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: null });
+        await setBlockEnabled(false);
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: 'Unlocked by partner',
+          message: `${myLock.lockedBy} has unlocked your access.`
+        });
+      }
+    }
+  }
+}
+
+async function mutualRequestLock() {
+  const api = await ensureBackendAPI();
+  if (!api) return false;
+  
+  const { mutual } = await chrome.storage.local.get('mutual');
+  if (!mutual?.roomId || !mutual?.userId) return false;
+  
+  // Lock yourself
+  await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: mutual.userId });
+  await setBlockEnabled(true);
+  
+  await api.setLock(mutual.roomId, mutual.userId, mutual.userId, true);
+  
+  return true;
+}
+
+async function mutualRequestUnlock(targetUserId) {
+  const api = await ensureBackendAPI();
+  if (!api) return false;
+  
+  const { mutual, lockedBy } = await chrome.storage.local.get(['mutual', STORAGE_KEYS.LOCKED_BY]);
+  if (!mutual?.roomId || !mutual?.userId) return false;
+  
+  // If trying to unlock someone else
+  if (targetUserId && targetUserId !== mutual.userId) {
+    await api.setLock(mutual.roomId, targetUserId, mutual.userId, false);
+    return { ok: true };
+  }
+  
+  // Can't unlock yourself if locked by partner
+  if (lockedBy && lockedBy !== mutual.userId) {
+    return { ok: false, reason: 'LOCKED_BY_PARTNER' };
+  }
+  
+  // Unlock yourself
+  await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: null });
+  await setBlockEnabled(false);
+  
+  await api.setLock(mutual.roomId, mutual.userId, mutual.userId, false);
+  
+  return { ok: true };
+}
+
+async function computeEffectiveLocked(state) {
+  const ultra = await isUltraLocked();
+  return ultra || state.blockEnabled;
+}
+
+function startBackendListener() {
+  if (!apiClient) return;
+  
+  apiClient.onSnapshot(async (data) => {
+    await handlePartnerLockChange(data);
+  });
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const initial = await getState();
+  if (initial.blockEnabled) await enableBlocking();
+  if (initial.mutual?.enabled && initial.backendEnabled) await ensureBackendAPI();
+});
