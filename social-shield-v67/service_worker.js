@@ -351,13 +351,30 @@ async function mutualRequestLock() {
   const { mutual } = await chrome.storage.local.get('mutual');
   if (!mutual?.roomId || !mutual?.userId) return false;
   
-  // Lock yourself
-  await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: mutual.userId });
-  await setBlockEnabled(true);
-  
-  await api.setLock(mutual.roomId, mutual.userId, mutual.userId, true);
-  
-  return true;
+  try {
+    // Get room state to find all users
+    const roomState = await api.getRoomState(mutual.roomId);
+    
+    // Lock yourself first
+    await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: mutual.userId });
+    await setBlockEnabled(true);
+    
+    // Lock all users in the room
+    if (roomState?.users && Array.isArray(roomState.users)) {
+      for (const user of roomState.users) {
+        try {
+          await api.setLock(mutual.roomId, user.userId, mutual.userId, true);
+        } catch (err) {
+          console.error(`Failed to lock user ${user.userId}:`, err);
+        }
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('mutualRequestLock error:', error);
+    return false;
+  }
 }
 
 async function mutualRequestUnlock(targetUserId) {

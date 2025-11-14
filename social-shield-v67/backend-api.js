@@ -46,38 +46,43 @@ export class LocusFocusAPI {
   // Connect WebSocket for real-time updates
   async connectWebSocket(roomId, userId) {
     return new Promise((resolve, reject) => {
-      const wsURL = this.baseURL.replace('http://', 'ws://').replace('https://', 'wss://');
-      this.ws = new WebSocket(wsURL);
+      try {
+        const wsURL = this.baseURL.replace('http://', 'ws://').replace('https://', 'wss://');
+        this.ws = new WebSocket(wsURL);
 
-      this.ws.onopen = () => {
-        // Join the room
-        this.ws.send(JSON.stringify({ type: 'join', roomId, userId }));
-        resolve();
-      };
+        this.ws.onopen = () => {
+          // Join the room - add small delay to ensure connection is ready
+          setTimeout(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+              this.ws.send(JSON.stringify({ type: 'join', roomId, userId }));
+            }
+          }, 100);
+          resolve();
+        };
 
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this.handleMessage(data);
-        } catch (error) {
-          console.error('WebSocket message error:', error);
-        }
-      };
-
-      this.ws.onerror = (error) => {
-        console.warn('WebSocket connection failed (will continue without real-time updates):', error);
-        // Don't reject - allow operation to continue without WebSocket
-        resolve();
-      };
-
-      this.ws.onclose = () => {
-        console.log('WebSocket closed, attempting to reconnect...');
-        setTimeout(() => {
-          if (this.roomId && this.userId) {
-            this.connectWebSocket(this.roomId, this.userId);
+        this.ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            this.handleMessage(data);
+          } catch (error) {
+            console.error('WebSocket message error:', error);
           }
-        }, 5000);
-      };
+        };
+
+        this.ws.onerror = (error) => {
+          console.warn('WebSocket connection failed (will continue without real-time updates):', error);
+          // Don't reject - allow operation to continue without WebSocket
+          resolve();
+        };
+
+        this.ws.onclose = () => {
+          console.log('WebSocket closed, will use HTTP polling instead');
+          // Don't auto-reconnect - polling will handle sync
+        };
+      } catch (error) {
+        console.warn('WebSocket setup failed:', error);
+        resolve(); // Continue without WebSocket
+      }
     });
   }
 
