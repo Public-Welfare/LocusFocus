@@ -363,9 +363,13 @@ async function mutualRequestLock() {
     if (roomState?.users && Array.isArray(roomState.users)) {
       for (const user of roomState.users) {
         try {
-          await api.setLock(mutual.roomId, user.userId, mutual.userId, true);
+          // Database returns user_id (snake_case), not userId (camelCase)
+          const targetUserId = user.user_id || user.userId;
+          if (targetUserId) {
+            await api.setLock(mutual.roomId, targetUserId, mutual.userId, true);
+          }
         } catch (err) {
-          console.error(`Failed to lock user ${user.userId}:`, err);
+          console.error(`Failed to lock user ${user.user_id || user.userId}:`, err);
         }
       }
     }
