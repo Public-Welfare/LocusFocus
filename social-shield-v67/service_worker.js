@@ -156,31 +156,64 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ lockedBy, canUnlock: !lockedBy || lockedBy === mutual?.userId });
     }
     if (msg.type === 'CREATE_GROUP') {
-      const { groupName, userId } = msg;
-      const groupId = 'group-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-      await chrome.storage.local.set({
-        [STORAGE_KEYS.MUTUAL]: { enabled: true, userId, roomId: groupId, isOwner: true },
-        [STORAGE_KEYS.BACKEND_ENABLED]: true
-      });
-      if (apiClient) {
-        apiClient.disconnect();
-        apiClient = null;
+      try {
+        const { groupName, userId } = msg;
+        const groupId = 'group-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        await chrome.storage.local.set({
+          [STORAGE_KEYS.MUTUAL]: { enabled: true, userId, roomId: groupId, isOwner: true },
+          [STORAGE_KEYS.BACKEND_ENABLED]: true
+        });
+        if (apiClient) {
+          apiClient.disconnect();
+          apiClient = null;
+        }
+        const api = await ensureBackendAPI();
+        if (api) {
+          await api.joinRoom(groupId, userId, userId);
+        }
+        sendResponse({ ok: true, groupId, inviteLink: groupId });
+      } catch (error) {
+        console.error('CREATE_GROUP error:', error);
+        sendResponse({ ok: false, error: error.message });
       }
-      await ensureBackendAPI();
-      sendResponse({ ok: true, groupId, inviteLink: groupId });
     }
     if (msg.type === 'JOIN_GROUP') {
-      const { groupId, userId } = msg;
-      await chrome.storage.local.set({
-        [STORAGE_KEYS.MUTUAL]: { enabled: true, userId, roomId: groupId, isOwner: false },
-        [STORAGE_KEYS.BACKEND_ENABLED]: true
-      });
-      if (apiClient) {
-        apiClient.disconnect();
-        apiClient = null;
+      try {
+        const { groupId, userId } = msg;
+        
+        // First, test backend connection
+        const backendConfig = (await chrome.storage.local.get('backendConfig')).backendConfig;
+        const backendUrl = backendConfig?.url || 'https://locusfocus-production.up.railway.app';
+        
+        // Test if backend is reachable
+        try {
+          const healthCheck = await fetch(`${backendUrl}/health`);
+          if (!healthCheck.ok) {
+            throw new Error('Backend server is not responding');
+          }
+        } catch (e) {
+          throw new Error('Cannot connect to backend server. Check your internet connection.');
+        }
+        
+        await chrome.storage.local.set({
+          [STORAGE_KEYS.MUTUAL]: { enabled: true, userId, roomId: groupId, isOwner: false },
+          [STORAGE_KEYS.BACKEND_ENABLED]: true
+        });
+        if (apiClient) {
+          apiClient.disconnect();
+          apiClient = null;
+        }
+        const api = await ensureBackendAPI();
+        if (!api) {
+          throw new Error('Failed to initialize backend connection');
+        }
+        
+        await api.joinRoom(groupId, userId, userId);
+        sendResponse({ ok: true, groupId });
+      } catch (error) {
+        console.error('JOIN_GROUP error:', error);
+        sendResponse({ ok: false, error: error.message });
       }
-      await ensureBackendAPI();
-      sendResponse({ ok: true, groupId });
     }
   })();
   return true;
@@ -200,6 +233,7 @@ async function ensureBackendAPI() {
     if (mutual?.roomId && mutual?.userId) {
       await apiClient.joinRoom(mutual.roomId, mutual.userId, mutual.userId);
       startBackendListener();
+      startPolling(); // Start HTTP polling as WebSocket fallback
     }
     
     return apiClient;
@@ -209,11 +243,77 @@ async function ensureBackendAPI() {
   }
 }
 
-async function handlePartnerLockChange(data) {
-  const { mutual } = await chrome.storage.local.get('mutual');
+// HTTP polling as fallback for WebSocket
+let pollingInterval = null;
+
+function startPolling() {
+  if (pollingInterval) return; // Already polling
   
-  if (data.type === 'lock_changed' && data.state) {
-    const myLock = data.state.locks?.[mutual.userId];
+  pollingInterval = setInterval(async () => {
+    try {
+      const { mutual } = await chrome.storage.local.get('mutual');
+      if (!mutual?.roomId || !apiClient) {
+        stopPolling();
+        return;
+      }
+      
+      // Poll room state every 3 seconds
+      const response = await fetch(`${apiClient.baseURL}/api/rooms/${mutual.roomId}/state`);
+      if (response.ok) {
+        const state = await response.json();
+        await handleBackendMessage({ type: 'state', data: state });
+      }
+    } catch (error) {
+      console.warn('Polling error:', error);
+    }
+  }, 3000); // Poll every 3 seconds
+}
+
+function stopPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+}
+
+async function handleBackendMessage(data) {
+  const { mutual } = await chrome.storage.local.get('mutual');
+  if (!mutual?.enabled) return;
+  
+  // Handle both 'state' polling updates and 'lock_changed' WebSocket events
+  if (data.type === 'state' && data.data?.locks) {
+    const myLock = data.data.locks[mutual.userId];
+    if (myLock) {
+      const wasLocked = (await chrome.storage.local.get(STORAGE_KEYS.LOCKED_BY))[STORAGE_KEYS.LOCKED_BY];
+      
+      if (myLock.locked && myLock.lockedBy !== mutual.userId) {
+        // Partner locked us
+        if (!wasLocked || wasLocked !== myLock.lockedBy) {
+          await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: myLock.lockedBy });
+          await setBlockEnabled(true);
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon128.png',
+            title: 'Locked by partner',
+            message: `${myLock.lockedBy} has locked your social media access.`
+          });
+        }
+      } else if (!myLock.locked && wasLocked && wasLocked !== mutual.userId) {
+        // Partner unlocked us
+        await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: null });
+        await setBlockEnabled(false);
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: 'Unlocked by partner',
+          message: `Your partner has unlocked your access.`
+        });
+      }
+    }
+  }
+  
+  if (data.type === 'lock_changed' && data.state?.locks) {
+    const myLock = data.state.locks[mutual.userId];
     
     if (myLock && myLock.lockedBy !== mutual.userId) {
       // Partner locked/unlocked us
@@ -238,6 +338,10 @@ async function handlePartnerLockChange(data) {
       }
     }
   }
+}
+
+async function handlePartnerLockChange(data) {
+  await handleBackendMessage(data);
 }
 
 async function mutualRequestLock() {

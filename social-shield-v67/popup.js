@@ -63,9 +63,21 @@ async function refresh() {
       unlockBtn.disabled = false;
       unlockBtn.style.opacity = '1';
     }
+    
+    // Show group blocked domains
+    const groupInfo = document.getElementById('group-info');
+    const groupDomains = document.getElementById('group-domains');
+    groupInfo.style.display = 'block';
+    
+    const domainsRes = await send({ type: 'GET_DOMAINS' });
+    if (domainsRes?.ok && domainsRes.domains) {
+      groupDomains.innerHTML = domainsRes.domains.slice(0, 10).join('<br>') + 
+        (domainsRes.domains.length > 10 ? `<br><em>+${domainsRes.domains.length - 10} more...</em>` : '');
+    }
   }
   else { 
     mstatus.textContent = 'Mutual Lock is not set up.'; 
+    document.getElementById('group-info').style.display = 'none';
   }
 }
 
@@ -89,6 +101,7 @@ async function main() {
   });
 
   document.getElementById('open-options').addEventListener('click', () => { chrome.runtime.openOptionsPage(); });
+  document.getElementById('edit-domains-btn')?.addEventListener('click', () => { chrome.runtime.openOptionsPage(); });
   document.getElementById('mutual-lock').addEventListener('click', async () => {
     const res = await send({ type: 'MUTUAL_REQUEST_LOCK' }); if (!res?.ok) alert('Configure Mutual Lock in Options first.');
   });

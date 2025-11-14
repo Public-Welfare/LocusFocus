@@ -5,7 +5,7 @@ const STORAGE_KEYS = {
   CUSTOM_DOMAINS: 'customDomains'
 };
 const THEME_KEY = 'locusfocus_theme';
-const DEFAULT_BACKEND_URL = 'https://locusfocus-backend.up.railway.app';
+const DEFAULT_BACKEND_URL = 'https://locusfocus-production.up.railway.app';
 function saveLocal(obj) { return chrome.storage.local.set(obj); }
 function getLocal(keys) { return chrome.storage.local.get(keys); }
 function el(id) { return document.getElementById(id); }
@@ -29,6 +29,15 @@ async function load() {
   if (mutual.enabled && mutual.roomId) {
     el('groupStatus').textContent = `Connected to group: ${mutual.roomId}`;
     el('groupStatus').style.color = '#059669';
+    
+    // Show group domains section
+    el('groupDomainsSection').style.display = 'block';
+    const domainsRes = await send({ type: 'GET_DOMAINS' });
+    if (domainsRes?.ok && domainsRes.domains) {
+      el('groupDomainsList').innerHTML = domainsRes.domains.join('<br>');
+    }
+  } else {
+    el('groupDomainsSection').style.display = 'none';
   }
   
   const domainsRes = await send({ type: 'GET_DOMAINS' });
@@ -105,6 +114,13 @@ async function createGroup() {
     return;
   }
 
+  // Save backend config first
+  const backendUrl = el('backendUrl').value.trim() || DEFAULT_BACKEND_URL;
+  await saveLocal({ 
+    [STORAGE_KEYS.BACKEND_CONFIG]: { url: backendUrl },
+    [STORAGE_KEYS.BACKEND_ENABLED]: true
+  });
+
   el('inviteLink').textContent = 'Creating group...';
   const res = await send({ type: 'CREATE_GROUP', userId, groupName: 'Group' });
   
@@ -112,12 +128,20 @@ async function createGroup() {
     const inviteCode = res.inviteLink;
     el('inviteLink').innerHTML = `
       <strong>Group created! Share this code:</strong><br>
-      <input type="text" value="${inviteCode}" readonly style="margin-top: 8px; font-family: monospace; font-size: 14px;" onclick="this.select()">
+      <input type="text" id="inviteCodeInput" value="${inviteCode}" readonly style="margin-top: 8px; font-family: monospace; font-size: 14px;">
       <br><small style="color: var(--muted);">Click to copy and share with friends</small>
     `;
+    // Add click handler without inline onclick
+    setTimeout(() => {
+      const input = document.getElementById('inviteCodeInput');
+      if (input) input.addEventListener('click', () => input.select());
+    }, 0);
     el('inviteLink').style.color = '#059669';
     el('groupStatus').textContent = `You created group: ${inviteCode}`;
     el('groupStatus').style.color = '#059669';
+    
+    // Reload to show group domains section
+    await load();
   } else {
     el('inviteLink').textContent = 'Failed to create group. Check backend connection.';
     el('inviteLink').style.color = '#d70015';
@@ -147,8 +171,12 @@ async function joinGroup() {
     el('groupStatus').textContent = `Successfully joined group: ${groupCode}`;
     el('groupStatus').style.color = '#059669';
     el('groupCode').value = '';
+    
+    // Reload to show group domains section
+    await load();
   } else {
-    el('groupStatus').textContent = 'Failed to join group. Check the invite code.';
+    const errorMsg = res?.error || 'Group not found or invalid invite code.';
+    el('groupStatus').textContent = `Failed to join: ${errorMsg}`;
     el('groupStatus').style.color = '#d70015';
   }
 }
@@ -183,6 +211,12 @@ async function saveDomains() {
   if (res?.ok) {
     el('domains-status').textContent = `Saved ${domains.length} domains.`;
     el('domains-status').style.color = '#059669';
+    
+    // Update group domains display if in a group
+    const data = await getLocal([STORAGE_KEYS.MUTUAL]);
+    if (data[STORAGE_KEYS.MUTUAL]?.enabled) {
+      el('groupDomainsList').innerHTML = domains.join('<br>');
+    }
   } else {
     el('domains-status').textContent = 'Failed to save domains.';
   }

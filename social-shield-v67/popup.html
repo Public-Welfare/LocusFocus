@@ -67,6 +67,14 @@
         <button id="mutual-unlock" class="btn danger" type="button">Request Unlock</button>
       </div>
       <p id="mutual-status" class="note"></p>
+      
+      <div id="group-info" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <p class="muted" style="font-weight: 600; margin: 0;">📋 Group Blocked Sites</p>
+          <button id="edit-domains-btn" class="btn" style="padding: 4px 12px; font-size: 12px;" type="button">Edit</button>
+        </div>
+        <div id="group-domains" style="font-size: 12px; color: var(--muted); max-height: 100px; overflow-y: auto;"></div>
+      </div>
     </section>
 
     <footer class="popup-footer">

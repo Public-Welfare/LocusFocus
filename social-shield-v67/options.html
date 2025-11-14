@@ -76,6 +76,14 @@ youtube.com"></textarea>
       </div>
 
       <p id="groupStatus" class="status" style="margin-top: 16px;"></p>
+      
+      <div id="groupDomainsSection" style="display: none; margin-top: 24px; padding-top: 24px; border-top: 2px solid var(--border);">
+        <div class="card" style="background: var(--surface-muted); box-shadow: none;">
+          <p class="muted" style="font-weight: 600; margin-bottom: 12px;">📋 Group's Blocked Sites</p>
+          <p style="font-size: 14px; color: var(--muted); margin-bottom: 12px;">These are the sites currently blocked for your group. Edit them in the "Blocked websites" section above.</p>
+          <div id="groupDomainsList" style="font-size: 13px; color: var(--text); max-height: 150px; overflow-y: auto; padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);"></div>
+        </div>
+      </div>
     </section>
 
     <section class="card options-section">
@@ -93,7 +101,7 @@ youtube.com"></textarea>
       <div class="options-grid">
         <label class="field">
           <span class="field-label">Backend URL</span>
-          <input type="text" id="backendUrl" placeholder="https://your-backend.railway.app" value="https://locusfocus-backend.up.railway.app" />
+          <input type="text" id="backendUrl" placeholder="https://your-backend.railway.app" value="https://locusfocus-production.up.railway.app" />
         </label>
       </div>
       <p id="save-status" class="status"></p>

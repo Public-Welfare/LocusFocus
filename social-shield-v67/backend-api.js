@@ -1,7 +1,7 @@
 // API client for LocusFocus backend (replaces Firebase)
 export class LocusFocusAPI {
   constructor(baseURL) {
-    this.baseURL = baseURL || 'https://locusfocus-backend.up.railway.app';
+    this.baseURL = baseURL || 'https://locusfocus-production.up.railway.app';
     this.ws = null;
     this.listeners = new Map();
     this.roomId = null;
@@ -19,7 +19,8 @@ export class LocusFocusAPI {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to join room');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to join room (${response.status})`);
       }
 
       const data = await response.json();
@@ -27,11 +28,16 @@ export class LocusFocusAPI {
       this.roomId = roomId;
       this.userId = userId;
 
-      // Establish WebSocket connection for real-time updates
-      await this.connectWebSocket(roomId, userId);
+      // Establish WebSocket connection for real-time updates (non-blocking)
+      this.connectWebSocket(roomId, userId).catch(err => {
+        console.warn('WebSocket connection failed, will use polling instead:', err);
+      });
 
       return data;
     } catch (error) {
+      if (error.message === 'Failed to fetch') {
+        throw new Error('Cannot connect to backend server. Please check: 1) Internet connection 2) Backend server is running at ' + this.baseURL);
+      }
       console.error('Join room error:', error);
       throw error;
     }
@@ -59,8 +65,9 @@ export class LocusFocusAPI {
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        reject(error);
+        console.warn('WebSocket connection failed (will continue without real-time updates):', error);
+        // Don't reject - allow operation to continue without WebSocket
+        resolve();
       };
 
       this.ws.onclose = () => {
@@ -112,11 +119,17 @@ export class LocusFocusAPI {
   // Set lock status
   async setLock(roomId, targetUserId, lockedByUserId, locked) {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
       const response = await fetch(`${this.baseURL}/api/rooms/${roomId}/lock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUserId, lockedByUserId, locked })
+        body: JSON.stringify({ targetUserId, lockedByUserId, locked }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeout);
 
       if (!response.ok) {
         throw new Error('Failed to set lock');
@@ -124,6 +137,9 @@ export class LocusFocusAPI {
 
       return await response.json();
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - backend server not responding');
+      }
       console.error('Set lock error:', error);
       throw error;
     }
@@ -159,6 +175,6 @@ export class LocusFocusAPI {
 // Helper function to initialize API client
 export async function initBackendAPI() {
   const { backendConfig } = await chrome.storage.local.get('backendConfig');
-  const baseURL = backendConfig?.url || 'https://locusfocus-backend.up.railway.app';
+  const baseURL = backendConfig?.url || 'https://locusfocus-production.up.railway.app';
   return new LocusFocusAPI(baseURL);
 }
