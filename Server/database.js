@@ -6,6 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const dbPath = process.env.DATABASE_PATH || join(__dirname, 'locusfocus.db');
+console.log('Database path:', dbPath);
 const db = new Database(dbPath);
 
 // Enable WAL mode for better concurrency
