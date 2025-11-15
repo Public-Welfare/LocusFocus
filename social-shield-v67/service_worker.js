@@ -99,10 +99,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const state = await getState();
       state.effectiveLocked = await computeEffectiveLocked(state);
       sendResponse(state);
+      return;
     }
     if (msg.type === 'GET_DOMAINS') {
       const domains = await getActiveDomains();
       sendResponse({ ok: true, domains });
+      return;
     }
     if (msg.type === 'SAVE_DOMAINS') {
       const { domains } = msg;
@@ -113,6 +115,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await enableBlocking();
       }
       sendResponse({ ok: true });
+      return;
     }
     if (msg.type === 'TOGGLE_BLOCK') {
       const state = await getState();
@@ -120,6 +123,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const next = !state.blockEnabled;
       await setBlockEnabled(next);
       sendResponse({ ok: true, blockEnabled: next });
+      return;
     }
     if (msg.type === 'START_ULTRA_LOCK') {
       const { minutes } = msg;
@@ -128,8 +132,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       await setBlockEnabled(true);
       chrome.alarms.create('ultra-lock-check', { delayInMinutes: 1, periodInMinutes: 1 });
       sendResponse({ ok: true, until });
+      return;
     }
-    if (msg.type === 'CANCEL_ULTRA_LOCK') { sendResponse({ ok: false, reason: 'CANNOT_CANCEL_ULTRA_LOCK' }); }
+    if (msg.type === 'CANCEL_ULTRA_LOCK') { sendResponse({ ok: false, reason: 'CANNOT_CANCEL_ULTRA_LOCK' }); return; }
     if (msg.type === 'SAVE_MUTUAL_SETTINGS') {
       const { enabled, userId, roomId, backendEnabled, backendUrl } = msg.payload;
       await chrome.storage.local.set({
@@ -145,23 +150,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await ensureBackendAPI();
       }
       sendResponse({ ok: true });
+      return;
     }
-    if (msg.type === 'MUTUAL_REQUEST_LOCK') { const ok = await mutualRequestLock(); sendResponse({ ok }); }
+    if (msg.type === 'MUTUAL_REQUEST_LOCK') { const ok = await mutualRequestLock(); sendResponse({ ok }); return; }
     if (msg.type === 'LOCK_FRIEND') { 
       const res = await lockFriend(); 
       sendResponse(res); 
+      return;
     }
     if (msg.type === 'UNLOCK_MYSELF') { 
       const res = await unlockMyself(); 
       sendResponse(res); 
+      return;
     }
     if (msg.type === 'UNLOCK_FRIEND') { 
       const res = await unlockFriend(); 
       sendResponse(res); 
+      return;
     }
     if (msg.type === 'GET_LOCK_STATUS') {
       const { lockedBy, mutual } = await chrome.storage.local.get([STORAGE_KEYS.LOCKED_BY, 'mutual']);
       sendResponse({ lockedBy, canUnlock: !lockedBy || lockedBy === mutual?.userId });
+      return;
     }
     if (msg.type === 'CREATE_GROUP') {
       try {
@@ -368,6 +378,9 @@ async function mutualRequestLock() {
     await setBlockEnabled(true);
     
     // Lock all users in the room
+    let successCount = 0;
+    let failCount = 0;
+    
     if (roomState?.users && Array.isArray(roomState.users)) {
       for (const user of roomState.users) {
         try {
@@ -375,21 +388,35 @@ async function mutualRequestLock() {
           const targetUserId = user.user_id || user.userId;
           if (targetUserId) {
             await api.setLock(mutual.roomId, targetUserId, mutual.userId, true);
+            successCount++;
           }
         } catch (err) {
           console.error(`Failed to lock user ${user.user_id || user.userId}:`, err);
+          failCount++;
         }
       }
     }
     
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
-      title: 'All Locked',
-      message: 'All group members have been locked'
-    });
+    const totalUsers = roomState?.users?.length || 0;
     
-    return true;
+    if (successCount > 0) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: 'Lock Complete',
+        message: `Locked ${successCount}/${totalUsers} group member${totalUsers !== 1 ? 's' : ''}` + 
+                 (failCount > 0 ? ` (${failCount} failed)` : '')
+      });
+    } else {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: 'Lock Failed',
+        message: 'Failed to lock any group members'
+      });
+    }
+    
+    return successCount > 0;
   } catch (error) {
     console.error('mutualRequestLock error:', error);
     chrome.notifications.create({

@@ -11,12 +11,18 @@ export class LocusFocusAPI {
   // Join a room and establish WebSocket connection
   async joinRoom(roomId, userId, username) {
     try {
-      // First, join via HTTP
+      // First, join via HTTP with timeout
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
       const response = await fetch(`${this.baseURL}/api/rooms/${roomId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, username })
+        body: JSON.stringify({ userId, username }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -35,6 +41,9 @@ export class LocusFocusAPI {
 
       return data;
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - backend server not responding');
+      }
       if (error.message === 'Failed to fetch') {
         throw new Error('Cannot connect to backend server. Please check: 1) Internet connection 2) Backend server is running at ' + this.baseURL);
       }
@@ -110,12 +119,23 @@ export class LocusFocusAPI {
   // Get current room state
   async getRoomState(roomId) {
     try {
-      const response = await fetch(`${this.baseURL}/api/rooms/${roomId}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const response = await fetch(`${this.baseURL}/api/rooms/${roomId}`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeout);
+      
       if (!response.ok) {
         throw new Error('Room not found');
       }
       return await response.json();
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - backend server not responding');
+      }
       console.error('Get room state error:', error);
       throw error;
     }
@@ -153,12 +173,23 @@ export class LocusFocusAPI {
   // Get lock status for a user
   async getLockStatus(roomId, userId) {
     try {
-      const response = await fetch(`${this.baseURL}/api/rooms/${roomId}/locks/${userId}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const response = await fetch(`${this.baseURL}/api/rooms/${roomId}/locks/${userId}`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeout);
+      
       if (!response.ok) {
         throw new Error('Failed to get lock status');
       }
       return await response.json();
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - backend server not responding');
+      }
       console.error('Get lock status error:', error);
       throw error;
     }
