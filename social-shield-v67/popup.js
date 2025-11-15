@@ -41,11 +41,16 @@ async function refresh() {
   else { toggle.disabled = false; note.textContent = state.blockEnabled ? 'Blocking is ON.' : 'Blocking is OFF.'; }
 
   const mstatus = document.getElementById('mutual-status');
+  const lockFriendBtn = document.getElementById('lock-friend');
   const unlockMyselfBtn = document.getElementById('unlock-myself');
   const unlockFriendBtn = document.getElementById('unlock-friend');
   
   if (state.mutual?.enabled) { 
     mstatus.textContent = `Connected to room: ${state.mutual.roomId || 'unknown'}.`; 
+    
+    // Enable lock friend button always when connected
+    lockFriendBtn.disabled = false;
+    lockFriendBtn.style.opacity = '1';
     
     // Show lock status and enable/disable buttons based on who locked whom
     if (lockStatus?.lockedBy) {
@@ -86,6 +91,8 @@ async function refresh() {
   else { 
     mstatus.textContent = 'Mutual Lock is not set up.'; 
     document.getElementById('group-info').style.display = 'none';
+    lockFriendBtn.disabled = true;
+    lockFriendBtn.style.opacity = '0.5';
     unlockMyselfBtn.disabled = true;
     unlockMyselfBtn.style.opacity = '0.5';
     unlockFriendBtn.disabled = true;
@@ -114,9 +121,24 @@ async function main() {
 
   document.getElementById('open-options').addEventListener('click', () => { chrome.runtime.openOptionsPage(); });
   document.getElementById('edit-domains-btn')?.addEventListener('click', () => { chrome.runtime.openOptionsPage(); });
+  
   document.getElementById('mutual-lock').addEventListener('click', async () => {
     const res = await send({ type: 'MUTUAL_REQUEST_LOCK' }); 
     if (!res?.ok) alert('Configure Mutual Lock in Options first.');
+    await refresh();
+  });
+  
+  document.getElementById('lock-friend').addEventListener('click', async () => {
+    const state = await send({ type: 'GET_STATE' });
+    if (!state.mutual?.enabled) {
+      alert('Configure Mutual Lock in Options first.');
+      return;
+    }
+    
+    const res = await send({ type: 'LOCK_FRIEND' }); 
+    if (!res?.ok) {
+      alert(res?.message || 'Failed to lock your friend.');
+    }
     await refresh();
   });
   

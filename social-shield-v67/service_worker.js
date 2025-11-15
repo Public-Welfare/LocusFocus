@@ -147,6 +147,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ ok: true });
     }
     if (msg.type === 'MUTUAL_REQUEST_LOCK') { const ok = await mutualRequestLock(); sendResponse({ ok }); }
+    if (msg.type === 'LOCK_FRIEND') { 
+      const res = await lockFriend(); 
+      sendResponse(res); 
+    }
     if (msg.type === 'UNLOCK_MYSELF') { 
       const res = await unlockMyself(); 
       sendResponse(res); 
@@ -378,10 +382,79 @@ async function mutualRequestLock() {
       }
     }
     
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: 'All Locked',
+      message: 'All group members have been locked'
+    });
+    
     return true;
   } catch (error) {
     console.error('mutualRequestLock error:', error);
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: 'Lock Failed',
+      message: error.message || 'Failed to lock group members'
+    });
     return false;
+  }
+}
+
+async function lockFriend() {
+  const api = await ensureBackendAPI();
+  if (!api) return { ok: false, message: 'Backend not available' };
+  
+  const { mutual } = await chrome.storage.local.get('mutual');
+  if (!mutual?.roomId || !mutual?.userId) {
+    return { ok: false, message: 'Mutual lock not configured' };
+  }
+  
+  try {
+    // Get room state to find other users
+    const roomState = await api.getRoomState(mutual.roomId);
+    
+    if (!roomState?.users || roomState.users.length < 2) {
+      return { ok: false, message: 'No friends found in group' };
+    }
+    
+    // Find other users (not yourself)
+    const otherUsers = roomState.users.filter(user => {
+      const userId = user.user_id || user.userId;
+      return userId && userId !== mutual.userId;
+    });
+    
+    if (otherUsers.length === 0) {
+      return { ok: false, message: 'No friends found in group' };
+    }
+    
+    // Lock all friends
+    let lockedCount = 0;
+    for (const user of otherUsers) {
+      try {
+        const targetUserId = user.user_id || user.userId;
+        await api.setLock(mutual.roomId, targetUserId, mutual.userId, true);
+        lockedCount++;
+      } catch (err) {
+        console.error(`Failed to lock user ${user.user_id || user.userId}:`, err);
+      }
+    }
+    
+    if (lockedCount > 0) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: 'Friends Locked',
+        message: `Locked ${lockedCount} friend(s)`
+      });
+      return { ok: true, message: `Locked ${lockedCount} friend(s)` };
+    } else {
+      return { ok: false, message: 'Failed to lock friends' };
+    }
+  } catch (error) {
+    console.error('lockFriend error:', error);
+    return { ok: false, message: error.message };
   }
 }
 
