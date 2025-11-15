@@ -366,8 +366,19 @@ async function mutualRequestLock() {
   const api = await ensureBackendAPI();
   if (!api) return false;
   
-  const { mutual } = await chrome.storage.local.get('mutual');
+  const { mutual, lockedBy } = await chrome.storage.local.get(['mutual', STORAGE_KEYS.LOCKED_BY]);
   if (!mutual?.roomId || !mutual?.userId) return false;
+  
+  // Don't allow "Lock All" if you're locked by someone else
+  if (lockedBy && lockedBy !== mutual.userId) {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: 'Cannot Lock All',
+      message: 'You are locked by your partner. Only they can unlock you first.'
+    });
+    return false;
+  }
   
   try {
     // Get room state to find all users

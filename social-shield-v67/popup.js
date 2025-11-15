@@ -41,6 +41,7 @@ async function refresh() {
   else { toggle.disabled = false; note.textContent = state.blockEnabled ? 'Blocking is ON.' : 'Blocking is OFF.'; }
 
   const mstatus = document.getElementById('mutual-status');
+  const lockAllBtn = document.getElementById('mutual-lock');
   const lockFriendBtn = document.getElementById('lock-friend');
   const unlockMyselfBtn = document.getElementById('unlock-myself');
   const unlockFriendBtn = document.getElementById('unlock-friend');
@@ -48,13 +49,24 @@ async function refresh() {
   if (state.mutual?.enabled) { 
     mstatus.textContent = `Connected to room: ${state.mutual.roomId || 'unknown'}.`; 
     
-    // Enable lock friend button always when connected
-    lockFriendBtn.disabled = false;
-    lockFriendBtn.style.opacity = '1';
-    
     // Show lock status and enable/disable buttons based on who locked whom
     if (lockStatus?.lockedBy) {
       mstatus.textContent += ` Locked by ${lockStatus.canUnlock ? 'you' : 'partner'}.`;
+      
+      // If locked by partner, disable Lock All button
+      if (!lockStatus.canUnlock) {
+        lockAllBtn.disabled = true;
+        lockAllBtn.style.opacity = '0.5';
+        lockAllBtn.title = 'Cannot lock all when locked by partner';
+      } else {
+        lockAllBtn.disabled = false;
+        lockAllBtn.style.opacity = '1';
+        lockAllBtn.title = '';
+      }
+      
+      // Lock Friend button - always enabled when connected
+      lockFriendBtn.disabled = false;
+      lockFriendBtn.style.opacity = '1';
       
       // Unlock Myself button - only enabled if I locked myself
       if (lockStatus.canUnlock) {
@@ -70,7 +82,12 @@ async function refresh() {
       unlockFriendBtn.disabled = false;
       unlockFriendBtn.style.opacity = '1';
     } else {
-      // Not locked
+      // Not locked - enable all lock buttons
+      lockAllBtn.disabled = false;
+      lockAllBtn.style.opacity = '1';
+      lockFriendBtn.disabled = false;
+      lockFriendBtn.style.opacity = '1';
+      
       unlockMyselfBtn.disabled = true;
       unlockMyselfBtn.style.opacity = '0.5';
       unlockFriendBtn.disabled = true;
@@ -91,6 +108,8 @@ async function refresh() {
   else { 
     mstatus.textContent = 'Mutual Lock is not set up.'; 
     document.getElementById('group-info').style.display = 'none';
+    lockAllBtn.disabled = true;
+    lockAllBtn.style.opacity = '0.5';
     lockFriendBtn.disabled = true;
     lockFriendBtn.style.opacity = '0.5';
     unlockMyselfBtn.disabled = true;
