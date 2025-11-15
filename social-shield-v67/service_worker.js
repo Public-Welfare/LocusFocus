@@ -559,11 +559,14 @@ async function unlockMyself() {
   }
   
   try {
-    // Unlock yourself
+    // Unlock yourself locally
     await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: null });
     await setBlockEnabled(false);
     
-    await api.setLock(mutual.roomId, mutual.userId, mutual.userId, false);
+    // Only update backend if you locked yourself
+    if (!lockedBy || lockedBy === mutual.userId) {
+      await api.setLock(mutual.roomId, mutual.userId, mutual.userId, false);
+    }
     
     createNotification({
       type: 'basic',
