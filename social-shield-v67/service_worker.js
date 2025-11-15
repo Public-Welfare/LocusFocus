@@ -84,7 +84,7 @@ chrome.alarms.onAlarm.addListener(async alarm => {
       await chrome.storage.local.set({ [STORAGE_KEYS.ULTRA_LOCK_UNTIL]: null });
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icons/icon128.png',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Ultra Lock finished',
         message: 'You\'re free! Social sites are no longer forcibly locked.'
       });
@@ -293,7 +293,7 @@ async function handleBackendMessage(data) {
           await setBlockEnabled(true);
           chrome.notifications.create({
             type: 'basic',
-            iconUrl: 'icons/icon128.png',
+            iconUrl: chrome.runtime.getURL('icons/icon128.png'),
             title: 'Locked by partner',
             message: `${myLock.lockedBy} has locked your social media access.`
           });
@@ -304,7 +304,7 @@ async function handleBackendMessage(data) {
         await setBlockEnabled(false);
         chrome.notifications.create({
           type: 'basic',
-          iconUrl: 'icons/icon128.png',
+          iconUrl: chrome.runtime.getURL('icons/icon128.png'),
           title: 'Unlocked by partner',
           message: `Your partner has unlocked your access.`
         });
@@ -322,7 +322,7 @@ async function handleBackendMessage(data) {
         await setBlockEnabled(true);
         chrome.notifications.create({
           type: 'basic',
-          iconUrl: 'icons/icon128.png',
+          iconUrl: chrome.runtime.getURL('icons/icon128.png'),
           title: 'Locked by partner',
           message: `${myLock.lockedBy} has locked your social media access.`
         });
@@ -331,7 +331,7 @@ async function handleBackendMessage(data) {
         await setBlockEnabled(false);
         chrome.notifications.create({
           type: 'basic',
-          iconUrl: 'icons/icon128.png',
+          iconUrl: chrome.runtime.getURL('icons/icon128.png'),
           title: 'Unlocked by partner',
           message: `${myLock.lockedBy} has unlocked your access.`
         });
