@@ -467,9 +467,26 @@ async function unlockMyself() {
     return { ok: false, message: 'Mutual lock not configured' };
   }
   
-  // Can't unlock yourself if locked by partner
+  // Check if locked by partner
   if (lockedBy && lockedBy !== mutual.userId) {
-    return { ok: false, reason: 'LOCKED_BY_PARTNER', message: 'You are locked by your partner' };
+    // Check if there are other users in the room
+    try {
+      const roomState = await api.getRoomState(mutual.roomId);
+      const otherUsers = roomState?.users?.filter(user => {
+        const userId = user.user_id || user.userId;
+        return userId && userId !== mutual.userId;
+      }) || [];
+      
+      // If no friends in group, allow unlocking yourself
+      if (otherUsers.length === 0) {
+        console.log('No friends in group, allowing self-unlock');
+      } else {
+        return { ok: false, reason: 'LOCKED_BY_PARTNER', message: 'You are locked by your partner' };
+      }
+    } catch (err) {
+      console.error('Error checking room state:', err);
+      // If we can't check, allow unlock as a safety measure
+    }
   }
   
   try {
