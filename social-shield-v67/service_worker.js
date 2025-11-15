@@ -477,9 +477,15 @@ async function unlockMyself() {
         return userId && userId !== mutual.userId;
       }) || [];
       
-      // If no friends in group, allow unlocking yourself
-      if (otherUsers.length === 0) {
-        console.log('No friends in group, allowing self-unlock');
+      // Check if the person who locked you is still in the room
+      const lockedByUserStillPresent = otherUsers.some(user => {
+        const userId = user.user_id || user.userId;
+        return userId === lockedBy;
+      });
+      
+      // If no friends in group OR the person who locked you has left, allow unlocking yourself
+      if (otherUsers.length === 0 || !lockedByUserStillPresent) {
+        console.log('No friends in group or locker has left, allowing self-unlock');
       } else {
         return { ok: false, reason: 'LOCKED_BY_PARTNER', message: 'You are locked by your partner' };
       }
