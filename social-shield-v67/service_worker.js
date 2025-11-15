@@ -147,8 +147,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ ok: true });
     }
     if (msg.type === 'MUTUAL_REQUEST_LOCK') { const ok = await mutualRequestLock(); sendResponse({ ok }); }
-    if (msg.type === 'MUTUAL_REQUEST_UNLOCK') { 
-      const res = await mutualRequestUnlock(msg.targetUserId); 
+    if (msg.type === 'UNLOCK_MYSELF') { 
+      const res = await unlockMyself(); 
+      sendResponse(res); 
+    }
+    if (msg.type === 'UNLOCK_FRIEND') { 
+      const res = await unlockFriend(); 
       sendResponse(res); 
     }
     if (msg.type === 'GET_LOCK_STATUS') {
@@ -378,6 +382,97 @@ async function mutualRequestLock() {
   } catch (error) {
     console.error('mutualRequestLock error:', error);
     return false;
+  }
+}
+
+async function unlockMyself() {
+  const api = await ensureBackendAPI();
+  if (!api) return { ok: false, message: 'Backend not available' };
+  
+  const { mutual, lockedBy } = await chrome.storage.local.get(['mutual', STORAGE_KEYS.LOCKED_BY]);
+  if (!mutual?.roomId || !mutual?.userId) {
+    return { ok: false, message: 'Mutual lock not configured' };
+  }
+  
+  // Can't unlock yourself if locked by partner
+  if (lockedBy && lockedBy !== mutual.userId) {
+    return { ok: false, reason: 'LOCKED_BY_PARTNER', message: 'You are locked by your partner' };
+  }
+  
+  try {
+    // Unlock yourself
+    await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: null });
+    await setBlockEnabled(false);
+    
+    await api.setLock(mutual.roomId, mutual.userId, mutual.userId, false);
+    
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: 'Unlocked',
+      message: 'You have unlocked yourself'
+    });
+    
+    return { ok: true };
+  } catch (error) {
+    console.error('unlockMyself error:', error);
+    return { ok: false, message: error.message };
+  }
+}
+
+async function unlockFriend() {
+  const api = await ensureBackendAPI();
+  if (!api) return { ok: false, message: 'Backend not available' };
+  
+  const { mutual } = await chrome.storage.local.get('mutual');
+  if (!mutual?.roomId || !mutual?.userId) {
+    return { ok: false, message: 'Mutual lock not configured' };
+  }
+  
+  try {
+    // Get room state to find other users
+    const roomState = await api.getRoomState(mutual.roomId);
+    
+    if (!roomState?.users || roomState.users.length < 2) {
+      return { ok: false, message: 'No friends found in group' };
+    }
+    
+    // Find other users (not yourself)
+    const otherUsers = roomState.users.filter(user => {
+      const userId = user.user_id || user.userId;
+      return userId && userId !== mutual.userId;
+    });
+    
+    if (otherUsers.length === 0) {
+      return { ok: false, message: 'No friends found in group' };
+    }
+    
+    // Unlock all friends
+    let unlockedCount = 0;
+    for (const user of otherUsers) {
+      try {
+        const targetUserId = user.user_id || user.userId;
+        await api.setLock(mutual.roomId, targetUserId, mutual.userId, false);
+        unlockedCount++;
+      } catch (err) {
+        console.error(`Failed to unlock user ${user.user_id || user.userId}:`, err);
+      }
+    }
+    
+    if (unlockedCount > 0) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: 'Friends Unlocked',
+        message: `Unlocked ${unlockedCount} friend(s)`
+      });
+      return { ok: true, message: `Unlocked ${unlockedCount} friend(s)` };
+    } else {
+      return { ok: false, message: 'Failed to unlock friends' };
+    }
+  } catch (error) {
+    console.error('unlockFriend error:', error);
+    return { ok: false, message: error.message };
   }
 }
 

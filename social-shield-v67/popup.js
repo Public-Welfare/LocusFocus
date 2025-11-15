@@ -41,27 +41,35 @@ async function refresh() {
   else { toggle.disabled = false; note.textContent = state.blockEnabled ? 'Blocking is ON.' : 'Blocking is OFF.'; }
 
   const mstatus = document.getElementById('mutual-status');
-  const unlockBtn = document.getElementById('mutual-unlock');
+  const unlockMyselfBtn = document.getElementById('unlock-myself');
+  const unlockFriendBtn = document.getElementById('unlock-friend');
   
   if (state.mutual?.enabled) { 
     mstatus.textContent = `Connected to room: ${state.mutual.roomId || 'unknown'}.`; 
     
-    // Show lock status
+    // Show lock status and enable/disable buttons based on who locked whom
     if (lockStatus?.lockedBy) {
+      mstatus.textContent += ` Locked by ${lockStatus.canUnlock ? 'you' : 'partner'}.`;
+      
+      // Unlock Myself button - only enabled if I locked myself
       if (lockStatus.canUnlock) {
-        mstatus.textContent += ` Locked by you.`;
-        unlockBtn.textContent = 'Unlock Myself';
-        unlockBtn.disabled = false;
+        unlockMyselfBtn.disabled = false;
+        unlockMyselfBtn.style.opacity = '1';
       } else {
-        mstatus.textContent += ` Locked by partner.`;
-        unlockBtn.textContent = 'Unlock (Partner Only)';
-        unlockBtn.disabled = true;
-        unlockBtn.style.opacity = '0.5';
+        unlockMyselfBtn.disabled = true;
+        unlockMyselfBtn.style.opacity = '0.5';
+        unlockMyselfBtn.title = 'You are locked by your partner';
       }
+      
+      // Unlock Friend button - check if friend is locked and if I locked them
+      unlockFriendBtn.disabled = false;
+      unlockFriendBtn.style.opacity = '1';
     } else {
-      unlockBtn.textContent = 'Request Unlock';
-      unlockBtn.disabled = false;
-      unlockBtn.style.opacity = '1';
+      // Not locked
+      unlockMyselfBtn.disabled = true;
+      unlockMyselfBtn.style.opacity = '0.5';
+      unlockFriendBtn.disabled = true;
+      unlockFriendBtn.style.opacity = '0.5';
     }
     
     // Show group blocked domains
@@ -78,6 +86,10 @@ async function refresh() {
   else { 
     mstatus.textContent = 'Mutual Lock is not set up.'; 
     document.getElementById('group-info').style.display = 'none';
+    unlockMyselfBtn.disabled = true;
+    unlockMyselfBtn.style.opacity = '0.5';
+    unlockFriendBtn.disabled = true;
+    unlockFriendBtn.style.opacity = '0.5';
   }
 }
 
@@ -103,16 +115,39 @@ async function main() {
   document.getElementById('open-options').addEventListener('click', () => { chrome.runtime.openOptionsPage(); });
   document.getElementById('edit-domains-btn')?.addEventListener('click', () => { chrome.runtime.openOptionsPage(); });
   document.getElementById('mutual-lock').addEventListener('click', async () => {
-    const res = await send({ type: 'MUTUAL_REQUEST_LOCK' }); if (!res?.ok) alert('Configure Mutual Lock in Options first.');
+    const res = await send({ type: 'MUTUAL_REQUEST_LOCK' }); 
+    if (!res?.ok) alert('Configure Mutual Lock in Options first.');
+    await refresh();
   });
-  document.getElementById('mutual-unlock').addEventListener('click', async () => {
-    const res = await send({ type: 'MUTUAL_REQUEST_UNLOCK' }); 
+  
+  document.getElementById('unlock-myself').addEventListener('click', async () => {
+    const state = await send({ type: 'GET_STATE' });
+    if (!state.mutual?.enabled) {
+      alert('Configure Mutual Lock in Options first.');
+      return;
+    }
+    
+    const res = await send({ type: 'UNLOCK_MYSELF' }); 
     if (!res?.ok) {
       if (res?.reason === 'LOCKED_BY_PARTNER') {
         alert('You are locked by your partner. Only they can unlock you.');
       } else {
-        alert('Configure Mutual Lock in Options first.');
+        alert(res?.message || 'Failed to unlock yourself.');
       }
+    }
+    await refresh();
+  });
+  
+  document.getElementById('unlock-friend').addEventListener('click', async () => {
+    const state = await send({ type: 'GET_STATE' });
+    if (!state.mutual?.enabled) {
+      alert('Configure Mutual Lock in Options first.');
+      return;
+    }
+    
+    const res = await send({ type: 'UNLOCK_FRIEND' }); 
+    if (!res?.ok) {
+      alert(res?.message || 'Failed to unlock your friend.');
     }
     await refresh();
   });
