@@ -458,13 +458,26 @@ async function lockFriend() {
     
     // Lock all friends
     let lockedCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    
     for (const user of otherUsers) {
       try {
         const targetUserId = user.user_id || user.userId;
+        if (!targetUserId) {
+          console.error('Invalid user object, missing userId:', user);
+          failedCount++;
+          continue;
+        }
+        
+        console.log(`Attempting to lock friend: ${targetUserId}`);
         await api.setLock(mutual.roomId, targetUserId, mutual.userId, true);
+        console.log(`Successfully locked friend: ${targetUserId}`);
         lockedCount++;
       } catch (err) {
         console.error(`Failed to lock user ${user.user_id || user.userId}:`, err);
+        errors.push(err.message);
+        failedCount++;
       }
     }
     
@@ -473,11 +486,12 @@ async function lockFriend() {
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Friends Locked',
-        message: `Locked ${lockedCount} friend(s)`
+        message: `Locked ${lockedCount} friend(s)` + (failedCount > 0 ? ` (${failedCount} failed)` : '')
       });
       return { ok: true, message: `Locked ${lockedCount} friend(s)` };
     } else {
-      return { ok: false, message: 'Failed to lock friends' };
+      const errorMsg = errors.length > 0 ? errors[0] : 'Failed to lock friends';
+      return { ok: false, message: errorMsg };
     }
   } catch (error) {
     console.error('lockFriend error:', error);
