@@ -16,7 +16,7 @@ const RULESET_ID = 20000;
 
 // Helper function to create notifications with error handling
 function createNotification(options) {
-  createNotification(options, (notificationId) => {
+  chrome.notifications.create(options, (notificationId) => {
     if (chrome.runtime.lastError) {
       console.error('Notification error:', chrome.runtime.lastError);
     } else {
@@ -441,11 +441,17 @@ async function mutualRequestLock() {
     return successCount > 0;
   } catch (error) {
     console.error('mutualRequestLock error:', error);
+    
+    let errorMessage = error.message || 'Failed to lock group members';
+    if (error.message === 'Room not found') {
+      errorMessage = 'Group not found. Please create or join a group in Options page.';
+    }
+    
     createNotification({
       type: 'basic',
       iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title: 'Lock Failed',
-      message: error.message || 'Failed to lock group members'
+      message: errorMessage
     });
     return false;
   }
@@ -517,7 +523,13 @@ async function lockFriend() {
     }
   } catch (error) {
     console.error('lockFriend error:', error);
-    return { ok: false, message: error.message };
+    
+    let errorMessage = error.message;
+    if (error.message === 'Room not found') {
+      errorMessage = 'Group not found. Please create or join a group first in Options.';
+    }
+    
+    return { ok: false, message: errorMessage };
   }
 }
 
