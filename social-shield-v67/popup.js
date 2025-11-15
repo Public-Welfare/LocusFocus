@@ -188,17 +188,13 @@ async function main() {
       return;
     }
     
-    const res = await send({ type: 'UNLOCK_MYSELF' }); 
+    const res = await send({ type: 'MUTUAL_REQUEST_LOCK', unlockAll: true }); 
     if (!res?.ok) {
-      if (res?.reason === 'LOCKED_BY_PARTNER') {
-        document.getElementById('mutual-status').textContent = '⚠️ You are locked by your partner. Only they can unlock you.';
-      } else {
-        document.getElementById('mutual-status').textContent = '⚠️ ' + (res?.message || 'Failed to unlock yourself.');
-      }
+      document.getElementById('mutual-status').textContent = '⚠️ ' + (res?.message || 'Failed to unlock group.');
       document.getElementById('mutual-status').style.color = '#ff3b30';
       setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
     } else {
-      document.getElementById('mutual-status').textContent = '✓ Unlocked successfully';
+      document.getElementById('mutual-status').textContent = '✓ Group unlocked successfully';
       document.getElementById('mutual-status').style.color = '#34c759';
       setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
     }

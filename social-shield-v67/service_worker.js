@@ -163,7 +163,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ ok: true });
       return;
     }
-    if (msg.type === 'MUTUAL_REQUEST_LOCK') { const ok = await mutualRequestLock(); sendResponse({ ok }); return; }
+    if (msg.type === 'MUTUAL_REQUEST_LOCK') { 
+      const ok = await mutualRequestLock(msg.unlockAll); 
+      sendResponse({ ok }); 
+      return; 
+    }
     if (msg.type === 'LOCK_FRIEND') { 
       const res = await lockFriend(); 
       sendResponse(res); 
@@ -373,27 +377,75 @@ async function handlePartnerLockChange(data) {
   await handleBackendMessage(data);
 }
 
-async function mutualRequestLock() {
+async function mutualRequestLock(unlockAll = false) {
   const api = await ensureBackendAPI();
   if (!api) return false;
   
   const { mutual, lockedBy } = await chrome.storage.local.get(['mutual', STORAGE_KEYS.LOCKED_BY]);
   if (!mutual?.roomId || !mutual?.userId) return false;
   
-  // Don't allow "Lock All" if you're locked by someone else
-  if (lockedBy && lockedBy !== mutual.userId) {
-    createNotification({
-      type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
-      title: 'Cannot Lock All',
-      message: 'You are locked by your partner. Only they can unlock you first.'
-    });
-    return false;
+  // If unlocking all, skip the lock check
+  if (!unlockAll) {
+    // Don't allow "Lock All" if you're locked by someone else
+    if (lockedBy && lockedBy !== mutual.userId) {
+      createNotification({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: 'Cannot Lock All',
+        message: 'You are locked by your partner. Only they can unlock you first.'
+      });
+      return false;
+    }
   }
   
   try {
     // Get room state to find all users
     const roomState = await api.getRoomState(mutual.roomId);
+    
+    if (unlockAll) {
+      // Unlock all users in the room
+      await chrome.storage.local.remove(STORAGE_KEYS.LOCKED_BY);
+      await setBlockEnabled(false);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      if (roomState?.users && Array.isArray(roomState.users)) {
+        for (const user of roomState.users) {
+          try {
+            const targetUserId = user.user_id || user.userId;
+            if (targetUserId) {
+              await api.setLock(mutual.roomId, targetUserId, mutual.userId, false);
+              successCount++;
+            }
+          } catch (err) {
+            console.error(`Failed to unlock user ${user.user_id || user.userId}:`, err);
+            failCount++;
+          }
+        }
+      }
+      
+      const totalUsers = roomState?.users?.length || 0;
+      
+      if (successCount > 0) {
+        createNotification({
+          type: 'basic',
+          iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+          title: 'Unlock Complete',
+          message: `Unlocked ${successCount}/${totalUsers} group member${totalUsers !== 1 ? 's' : ''}` + 
+                   (failCount > 0 ? ` (${failCount} failed)` : '')
+        });
+      } else {
+        createNotification({
+          type: 'basic',
+          iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+          title: 'Unlock Failed',
+          message: 'Failed to unlock any group members'
+        });
+      }
+      
+      return successCount > 0;
+    }
     
     // Lock yourself first
     await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: mutual.userId });
@@ -450,7 +502,7 @@ async function mutualRequestLock() {
     createNotification({
       type: 'basic',
       iconUrl: chrome.runtime.getURL('icons/icon128.png'),
-      title: 'Lock Failed',
+      title: unlockAll ? 'Unlock Failed' : 'Lock Failed',
       message: errorMessage
     });
     return false;
