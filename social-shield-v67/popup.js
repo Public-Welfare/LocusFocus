@@ -109,7 +109,13 @@ async function main() {
 
   document.getElementById('toggle-block').addEventListener('change', async () => {
     const res = await send({ type: 'TOGGLE_BLOCK' });
-    if (!res.ok && res.reason === 'ULTRA_LOCK_ACTIVE') { await refresh(); alert('Cannot change while Ultra Lock is active.'); return; }
+    if (!res.ok && res.reason === 'ULTRA_LOCK_ACTIVE') { 
+      await refresh(); 
+      document.getElementById('block-note').textContent = '⚠️ Cannot change while Ultra Lock is active.';
+      document.getElementById('block-note').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('block-note').style.color = ''; }, 3000);
+      return; 
+    }
     await refresh();
   });
 
@@ -124,20 +130,32 @@ async function main() {
   
   document.getElementById('mutual-lock').addEventListener('click', async () => {
     const res = await send({ type: 'MUTUAL_REQUEST_LOCK' }); 
-    if (!res?.ok) alert('Configure Mutual Lock in Options first.');
+    if (!res?.ok) {
+      document.getElementById('mutual-status').textContent = '⚠️ Configure Mutual Lock in Options first.';
+      document.getElementById('mutual-status').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
+    }
     await refresh();
   });
   
   document.getElementById('lock-friend').addEventListener('click', async () => {
     const state = await send({ type: 'GET_STATE' });
     if (!state.mutual?.enabled) {
-      alert('Configure Mutual Lock in Options first.');
+      document.getElementById('mutual-status').textContent = '⚠️ Configure Mutual Lock in Options first.';
+      document.getElementById('mutual-status').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
       return;
     }
     
     const res = await send({ type: 'LOCK_FRIEND' }); 
     if (!res?.ok) {
-      alert(res?.message || 'Failed to lock your friend.');
+      document.getElementById('mutual-status').textContent = '⚠️ ' + (res?.message || 'Failed to lock your friend.');
+      document.getElementById('mutual-status').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
+    } else {
+      document.getElementById('mutual-status').textContent = '✓ ' + (res?.message || 'Friend locked successfully');
+      document.getElementById('mutual-status').style.color = '#34c759';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
     }
     await refresh();
   });
@@ -145,17 +163,25 @@ async function main() {
   document.getElementById('unlock-myself').addEventListener('click', async () => {
     const state = await send({ type: 'GET_STATE' });
     if (!state.mutual?.enabled) {
-      alert('Configure Mutual Lock in Options first.');
+      document.getElementById('mutual-status').textContent = '⚠️ Configure Mutual Lock in Options first.';
+      document.getElementById('mutual-status').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
       return;
     }
     
     const res = await send({ type: 'UNLOCK_MYSELF' }); 
     if (!res?.ok) {
       if (res?.reason === 'LOCKED_BY_PARTNER') {
-        alert('You are locked by your partner. Only they can unlock you.');
+        document.getElementById('mutual-status').textContent = '⚠️ You are locked by your partner. Only they can unlock you.';
       } else {
-        alert(res?.message || 'Failed to unlock yourself.');
+        document.getElementById('mutual-status').textContent = '⚠️ ' + (res?.message || 'Failed to unlock yourself.');
       }
+      document.getElementById('mutual-status').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
+    } else {
+      document.getElementById('mutual-status').textContent = '✓ Unlocked successfully';
+      document.getElementById('mutual-status').style.color = '#34c759';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
     }
     await refresh();
   });
@@ -163,13 +189,21 @@ async function main() {
   document.getElementById('unlock-friend').addEventListener('click', async () => {
     const state = await send({ type: 'GET_STATE' });
     if (!state.mutual?.enabled) {
-      alert('Configure Mutual Lock in Options first.');
+      document.getElementById('mutual-status').textContent = '⚠️ Configure Mutual Lock in Options first.';
+      document.getElementById('mutual-status').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
       return;
     }
     
     const res = await send({ type: 'UNLOCK_FRIEND' }); 
     if (!res?.ok) {
-      alert(res?.message || 'Failed to unlock your friend.');
+      document.getElementById('mutual-status').textContent = '⚠️ ' + (res?.message || 'Failed to unlock your friend.');
+      document.getElementById('mutual-status').style.color = '#ff3b30';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
+    } else {
+      document.getElementById('mutual-status').textContent = '✓ ' + (res?.message || 'Friend unlocked successfully');
+      document.getElementById('mutual-status').style.color = '#34c759';
+      setTimeout(() => { document.getElementById('mutual-status').style.color = ''; }, 3000);
     }
     await refresh();
   });
