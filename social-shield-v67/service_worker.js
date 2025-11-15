@@ -14,6 +14,17 @@ const STORAGE_KEYS = {
 
 const RULESET_ID = 20000;
 
+// Helper function to create notifications with error handling
+function createNotification(options) {
+  createNotification(options, (notificationId) => {
+    if (chrome.runtime.lastError) {
+      console.error('Notification error:', chrome.runtime.lastError);
+    } else {
+      console.log('Notification created:', notificationId);
+    }
+  });
+}
+
 async function getActiveDomains() {
   const { [STORAGE_KEYS.CUSTOM_DOMAINS]: customDomains } = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_DOMAINS);
   if (customDomains && Array.isArray(customDomains) && customDomains.length > 0) {
@@ -82,7 +93,7 @@ chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name === 'ultra-lock-check') {
     if (!(await isUltraLocked())) {
       await chrome.storage.local.set({ [STORAGE_KEYS.ULTRA_LOCK_UNTIL]: null });
-      chrome.notifications.create({
+      createNotification({
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Ultra Lock finished',
@@ -309,7 +320,7 @@ async function handleBackendMessage(data) {
         if (!wasLocked || wasLocked !== myLock.lockedBy) {
           await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: myLock.lockedBy });
           await setBlockEnabled(true);
-          chrome.notifications.create({
+          createNotification({
             type: 'basic',
             iconUrl: chrome.runtime.getURL('icons/icon128.png'),
             title: 'Locked by partner',
@@ -320,7 +331,7 @@ async function handleBackendMessage(data) {
         // Partner unlocked us
         await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: null });
         await setBlockEnabled(false);
-        chrome.notifications.create({
+        createNotification({
           type: 'basic',
           iconUrl: chrome.runtime.getURL('icons/icon128.png'),
           title: 'Unlocked by partner',
@@ -338,7 +349,7 @@ async function handleBackendMessage(data) {
       if (myLock.locked) {
         await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: myLock.lockedBy });
         await setBlockEnabled(true);
-        chrome.notifications.create({
+        createNotification({
           type: 'basic',
           iconUrl: chrome.runtime.getURL('icons/icon128.png'),
           title: 'Locked by partner',
@@ -347,7 +358,7 @@ async function handleBackendMessage(data) {
       } else {
         await chrome.storage.local.set({ [STORAGE_KEYS.LOCKED_BY]: null });
         await setBlockEnabled(false);
-        chrome.notifications.create({
+        createNotification({
           type: 'basic',
           iconUrl: chrome.runtime.getURL('icons/icon128.png'),
           title: 'Unlocked by partner',
@@ -371,7 +382,7 @@ async function mutualRequestLock() {
   
   // Don't allow "Lock All" if you're locked by someone else
   if (lockedBy && lockedBy !== mutual.userId) {
-    chrome.notifications.create({
+    createNotification({
       type: 'basic',
       iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title: 'Cannot Lock All',
@@ -411,7 +422,7 @@ async function mutualRequestLock() {
     const totalUsers = roomState?.users?.length || 0;
     
     if (successCount > 0) {
-      chrome.notifications.create({
+      createNotification({
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Lock Complete',
@@ -419,7 +430,7 @@ async function mutualRequestLock() {
                  (failCount > 0 ? ` (${failCount} failed)` : '')
       });
     } else {
-      chrome.notifications.create({
+      createNotification({
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Lock Failed',
@@ -430,7 +441,7 @@ async function mutualRequestLock() {
     return successCount > 0;
   } catch (error) {
     console.error('mutualRequestLock error:', error);
-    chrome.notifications.create({
+    createNotification({
       type: 'basic',
       iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title: 'Lock Failed',
@@ -493,7 +504,7 @@ async function lockFriend() {
     }
     
     if (lockedCount > 0) {
-      chrome.notifications.create({
+      createNotification({
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Friends Locked',
@@ -554,7 +565,7 @@ async function unlockMyself() {
     
     await api.setLock(mutual.roomId, mutual.userId, mutual.userId, false);
     
-    chrome.notifications.create({
+    createNotification({
       type: 'basic',
       iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title: 'Unlocked',
@@ -623,7 +634,7 @@ async function unlockFriend() {
     }
     
     if (unlockedCount > 0) {
-      chrome.notifications.create({
+      createNotification({
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Friends Unlocked',
@@ -684,3 +695,4 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (initial.blockEnabled) await enableBlocking();
   if (initial.mutual?.enabled && initial.backendEnabled) await ensureBackendAPI();
 });
+
