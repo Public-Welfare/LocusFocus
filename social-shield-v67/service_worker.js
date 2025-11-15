@@ -553,7 +553,7 @@ async function unlockFriend() {
   }
   
   try {
-    // Get room state to find other users
+    // Get room state to find other users and their lock status
     const roomState = await api.getRoomState(mutual.roomId);
     
     if (!roomState?.users || roomState.users.length < 2) {
@@ -570,15 +570,30 @@ async function unlockFriend() {
       return { ok: false, message: 'No friends found in group' };
     }
     
-    // Unlock all friends
+    // Unlock all friends - check who locked them from roomState.locks
     let unlockedCount = 0;
+    let failedCount = 0;
+    
     for (const user of otherUsers) {
       try {
         const targetUserId = user.user_id || user.userId;
-        await api.setLock(mutual.roomId, targetUserId, mutual.userId, false);
-        unlockedCount++;
+        
+        // Get the current lock status for this user
+        const lockInfo = roomState.locks?.[targetUserId];
+        
+        // Only try to unlock if they are actually locked
+        if (lockInfo && lockInfo.locked) {
+          // Use the current lockedBy from the lock status, or fallback to mutual.userId
+          const lockedByUserId = lockInfo.lockedBy || mutual.userId;
+          await api.setLock(mutual.roomId, targetUserId, lockedByUserId, false);
+          unlockedCount++;
+        } else {
+          // User is not locked, skip
+          console.log(`User ${targetUserId} is not locked, skipping`);
+        }
       } catch (err) {
         console.error(`Failed to unlock user ${user.user_id || user.userId}:`, err);
+        failedCount++;
       }
     }
     
@@ -587,11 +602,11 @@ async function unlockFriend() {
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Friends Unlocked',
-        message: `Unlocked ${unlockedCount} friend(s)`
+        message: `Unlocked ${unlockedCount} friend(s)` + (failedCount > 0 ? ` (${failedCount} failed)` : '')
       });
       return { ok: true, message: `Unlocked ${unlockedCount} friend(s)` };
     } else {
-      return { ok: false, message: 'Failed to unlock friends' };
+      return { ok: false, message: 'No locked friends found or all unlocks failed' };
     }
   } catch (error) {
     console.error('unlockFriend error:', error);
